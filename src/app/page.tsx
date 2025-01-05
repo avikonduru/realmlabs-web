@@ -124,12 +124,12 @@ const HomwPage = () => {
                   <Switch
                     size="lg"
                     checked={subscriberSettings.unsubscribeToAllEmails}
-                    onChange={(e) =>
+                    onCheckedChange={({ checked }) => {
                       setSubscriberSettings({
                         ...subscriberSettings,
-                        unsubscribeToAllEmails: e.target.checked,
-                      })
-                    }
+                        unsubscribeToAllEmails: checked,
+                      });
+                    }}
                   />
                 </Flex>
               </Stack>
