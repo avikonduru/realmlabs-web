@@ -1,27 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { toaster, Toaster } from '@/components/ui/toaster';
-import { Skeleton, SkeletonCircle, SkeletonText } from '@/components/ui/skeleton';
-import {
-  Container,
-  Card,
-  Text,
-  Center,
-  Box,
-  Flex,
-  Stack,
-  StackSeparator,
-  Link,
-} from '@chakra-ui/react';
+import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
+import { Container, Card, Text, Box, Flex, Stack, StackSeparator, Link } from '@chakra-ui/react';
 
-const HomwPage = () => {
+function SubscriptionManager() {
   const searchParams = useSearchParams();
-
   const [loading, setLoading] = useState(true);
   const [subscriberSettings, setSubscriberSettings] = useState({
     unsubscribeToMarketingEmails: false,
@@ -32,19 +20,18 @@ const HomwPage = () => {
     const fetchData = async () => {
       try {
         const userId = searchParams.get('userId') || '';
-
         console.log({ userId });
 
         await toaster.promise(
           new Promise((resolve) => {
             setTimeout(() => {
               setLoading(false);
-              resolve(true);
-              setSubscriberSettings({
-                ...subscriberSettings,
+              setSubscriberSettings((prevSettings) => ({
+                ...prevSettings,
                 unsubscribeToMarketingEmails: false,
                 unsubscribeToAllEmails: true,
-              });
+              }));
+              resolve(true);
             }, 5000);
           }),
           {
@@ -58,10 +45,10 @@ const HomwPage = () => {
               action: {
                 label: 'Undo',
                 onClick: () => {
-                  setSubscriberSettings({
-                    ...subscriberSettings,
+                  setSubscriberSettings((prevSettings) => ({
+                    ...prevSettings,
                     unsubscribeToAllEmails: false,
-                  });
+                  }));
                 },
               },
             },
@@ -72,12 +59,13 @@ const HomwPage = () => {
           }
         );
       } catch (error) {
+        console.error(error);
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+  }, [searchParams]);
 
   return (
     <Container maxW="lg">
@@ -152,6 +140,29 @@ const HomwPage = () => {
       </Flex>
     </Container>
   );
-};
+}
 
-export default HomwPage;
+export default function HomePage() {
+  return (
+    <Suspense fallback={<SubscriptionLoadingState />}>
+      <SubscriptionManager />
+    </Suspense>
+  );
+}
+
+function SubscriptionLoadingState() {
+  return (
+    <Container maxW="lg">
+      <Flex mt="8" h="100%" align="center" justify="center">
+        <Card.Root variant="subtle" width="full">
+          <Card.Body>
+            <Box mb="8">
+              <SkeletonText noOfLines={2} />
+            </Box>
+            <Skeleton height="200px" />
+          </Card.Body>
+        </Card.Root>
+      </Flex>
+    </Container>
+  );
+}
