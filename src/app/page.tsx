@@ -12,9 +12,9 @@ import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
 import { Container, Card, Text, Box, Flex, Stack, StackSeparator, Link } from '@chakra-ui/react';
 
 interface UserData {
+  created_at: string;
   email: string;
   uuid: string;
-  [key: string]: any; // for any other properties that might exist
 }
 
 function SubscriptionManager() {
@@ -46,6 +46,8 @@ function SubscriptionManager() {
                 .select('*')
                 .eq('recipient_id', userId)
                 .single();
+
+              console.log({ userData });
 
               if (userError || subscriptionError) {
                 reject();
