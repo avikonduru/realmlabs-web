@@ -3,6 +3,9 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
+// config
+import { supabase } from '@/configs/supabase';
+
 import { Switch } from '@/components/ui/switch';
 import { toaster, Toaster } from '@/components/ui/toaster';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
@@ -10,33 +13,79 @@ import { Container, Card, Text, Box, Flex, Stack, StackSeparator, Link } from '@
 
 function SubscriptionManager() {
   const searchParams = useSearchParams();
-  const [loading, setLoading] = useState(true);
   const [subscriberSettings, setSubscriberSettings] = useState({
     unsubscribeToMarketingEmails: false,
     unsubscribeToAllEmails: false,
   });
+  const [userData, setUserData] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+  const [optionsLoading, setOptionsLoading] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         const userId = searchParams.get('userId') || '';
-        console.log({ userId });
 
         await toaster.promise(
-          new Promise((resolve) => {
-            setTimeout(() => {
-              setLoading(false);
-              setSubscriberSettings((prevSettings) => ({
-                ...prevSettings,
-                unsubscribeToMarketingEmails: false,
-                unsubscribeToAllEmails: true,
-              }));
-              resolve(true);
-            }, 5000);
+          new Promise(async (resolve, reject) => {
+            try {
+              const { data: userData, error: userError } = await supabase
+                .from('recipients')
+                .select('*')
+                .eq('uuid', userId)
+                .single();
+              const { data: subscriptionData, error: subscriptionError } = await supabase
+                .from('recipient_subscription_settings')
+                .select('*')
+                .eq('recipient_id', userId)
+                .single();
+
+              if (userError || subscriptionError) {
+                reject({
+                  title: 'Error',
+                  description: 'Failed to load subscription status',
+                });
+                setOptionsLoading(false);
+              } else if (!userData) {
+                reject({
+                  title: 'Error',
+                  description: 'No user data found',
+                });
+                setOptionsLoading(false);
+              } else if (!subscriptionData) {
+                reject({
+                  title: 'Error',
+                  description: 'No subscription data found',
+                });
+                setOptionsLoading(false);
+              } else {
+                setUserData(userData);
+                setSubscriberSettings((prevSettings) => ({
+                  ...prevSettings,
+                  unsubscribeToMarketingEmails: true,
+                  unsubscribeToAllEmails: subscriptionData?.all_emails_unsub || false,
+                }));
+                await supabase
+                  .from('recipient_subscription_settings')
+                  .update({
+                    marketing_emails_unsub: true,
+                  })
+                  .eq('recipient_id', userId);
+                setLoading(false);
+                resolve(userData);
+              }
+            } catch (err) {
+              reject({
+                title: 'Error',
+                description: 'An unexpected error occurred',
+              });
+              setOptionsLoading(false);
+            }
           }),
           {
             loading: {
-              title: 'Loading your subscription status...',
+              title: 'Loading your subscription status',
               description: 'Please wait...',
             },
             success: {
@@ -44,18 +93,26 @@ function SubscriptionManager() {
               description: 'Your subscription status has been updated.',
               action: {
                 label: 'Undo',
-                onClick: () => {
+                onClick: async () => {
+                  setOptionsLoading(true);
                   setSubscriberSettings((prevSettings) => ({
                     ...prevSettings,
-                    unsubscribeToAllEmails: false,
+                    unsubscribeToMarketingEmails: false,
                   }));
+                  await supabase
+                    .from('recipient_subscription_settings')
+                    .update({
+                      marketing_emails_unsub: false,
+                    })
+                    .eq('recipient_id', userId);
+                  setOptionsLoading(false);
                 },
               },
             },
-            error: {
-              title: 'Error',
-              description: 'Failed to load subscription status',
-            },
+            error: (err) => ({
+              title: err.title || 'Error',
+              description: err.description || 'An unexpected error occurred',
+            }),
           }
         );
       } catch (error) {
@@ -66,6 +123,46 @@ function SubscriptionManager() {
 
     fetchData();
   }, [searchParams]);
+
+  const handleSettingsUpdate = async (
+    updatedSetting: boolean,
+    settingType: string,
+    userId: string | undefined
+  ) => {
+    try {
+      if (!userId) {
+        throw new Error('User ID not found');
+      }
+
+      setOptionsLoading(true);
+      if (settingType === 'marketing_emails_unsub') {
+        await supabase
+          .from('recipient_subscription_settings')
+          .update({
+            [settingType]: updatedSetting,
+          })
+          .eq('recipient_id', userId);
+        setOptionsLoading(false);
+      } else if (settingType === 'all_emails_unsub') {
+        await supabase
+          .from('recipient_subscription_settings')
+          .update({
+            [settingType]: updatedSetting,
+          })
+          .eq('recipient_id', userId);
+        setOptionsLoading(false);
+      } else {
+        throw new Error('Invalid setting type');
+      }
+    } catch (error) {
+      console.error(error);
+      toaster.create({
+        title: 'Error',
+        description: 'An unexpected error occurred',
+        type: 'error',
+      });
+    }
+  };
 
   return (
     <Container maxW="lg">
@@ -82,7 +179,7 @@ function SubscriptionManager() {
           ) : (
             <Card.Body>
               <Box mb="8">
-                <Card.Title>Hi avikonduru@gmail.com,</Card.Title>
+                <Card.Title>Hi {userData?.email || ''},</Card.Title>
                 <Card.Description fontSize="sm" color="muted">
                   Manage your subscriptions
                 </Card.Description>
@@ -95,12 +192,14 @@ function SubscriptionManager() {
                   </Text>
                   <Switch
                     size="lg"
+                    disabled={optionsLoading}
                     checked={subscriberSettings.unsubscribeToMarketingEmails}
-                    onCheckedChange={({ checked }) => {
+                    onCheckedChange={async ({ checked }) => {
                       setSubscriberSettings({
                         ...subscriberSettings,
                         unsubscribeToMarketingEmails: checked,
                       });
+                      await handleSettingsUpdate(checked, 'marketing_emails_unsub', userData?.uuid);
                     }}
                   />
                 </Flex>
@@ -111,12 +210,14 @@ function SubscriptionManager() {
                   </Text>
                   <Switch
                     size="lg"
+                    disabled={optionsLoading}
                     checked={subscriberSettings.unsubscribeToAllEmails}
-                    onCheckedChange={({ checked }) => {
+                    onCheckedChange={async ({ checked }) => {
                       setSubscriberSettings({
                         ...subscriberSettings,
                         unsubscribeToAllEmails: checked,
                       });
+                      await handleSettingsUpdate(checked, 'all_emails_unsub', userData?.uuid);
                     }}
                   />
                 </Flex>
