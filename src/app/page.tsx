@@ -11,13 +11,19 @@ import { toaster, Toaster } from '@/components/ui/toaster';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
 import { Container, Card, Text, Box, Flex, Stack, StackSeparator, Link } from '@chakra-ui/react';
 
+interface UserData {
+  email: string;
+  uuid: string;
+  [key: string]: any; // for any other properties that might exist
+}
+
 function SubscriptionManager() {
   const searchParams = useSearchParams();
   const [subscriberSettings, setSubscriberSettings] = useState({
     unsubscribeToMarketingEmails: false,
     unsubscribeToAllEmails: false,
   });
-  const [userData, setUserData] = useState(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [optionsLoading, setOptionsLoading] = useState(false);
@@ -42,22 +48,13 @@ function SubscriptionManager() {
                 .single();
 
               if (userError || subscriptionError) {
-                reject({
-                  title: 'Error',
-                  description: 'Failed to load subscription status',
-                });
+                reject();
                 setOptionsLoading(false);
               } else if (!userData) {
-                reject({
-                  title: 'Error',
-                  description: 'No user data found',
-                });
+                reject();
                 setOptionsLoading(false);
               } else if (!subscriptionData) {
-                reject({
-                  title: 'Error',
-                  description: 'No subscription data found',
-                });
+                reject();
                 setOptionsLoading(false);
               } else {
                 setUserData(userData);
@@ -76,10 +73,8 @@ function SubscriptionManager() {
                 resolve(userData);
               }
             } catch (err) {
-              reject({
-                title: 'Error',
-                description: 'An unexpected error occurred',
-              });
+              console.error(err);
+              reject();
               setOptionsLoading(false);
             }
           }),
@@ -109,9 +104,9 @@ function SubscriptionManager() {
                 },
               },
             },
-            error: (err) => ({
-              title: err.title || 'Error',
-              description: err.description || 'An unexpected error occurred',
+            error: () => ({
+              title: 'Error',
+              description: 'An unexpected error occurred',
             }),
           }
         );
